@@ -28,3 +28,27 @@ pipeline {
         }
     }
 }
+
+//sh script
+
+#!/bin/bash
+
+# Define Kubernetes namespace and label selector for identifying pods to clean up
+namespace="your-namespace"
+labelSelector="kubernetes_pod_operator=True"
+
+# Get list of running pods with the specified label selector in the specified namespace
+runningPods=$(kubectl get pods -n ${namespace} -l ${labelSelector} --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+
+# Iterate over each running pod
+for pod in ${runningPods}; do
+    # Check if the pod is actually not running
+    execOutput=$(kubectl exec ${pod} -n ${namespace} -- bin/bash 2>&1)
+    
+    # If the exec command failed with the expected error message, delete the pod
+    if [ $? -ne 0 ] && echo "${execOutput}" | grep -q "cannot exec in a stopped container: unknown"; then
+        # Force delete the pod
+        kubectl delete pod ${pod} -n ${namespace} --force --grace-period=0
+    fi
+done
+
